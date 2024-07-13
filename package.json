@@ -3,15 +3,19 @@
 	"type": "module",
 	"scripts": {
 		"build": "esbuild src/main.ts --platform=node --bundle --format=esm --sourcemap --target=node20 --outfile=build/main.js --packages=external",
-		"start": "node build/main.js"
+		"start": "node build/main.js",
+		"dev": "tsx --watch --watch-preserve-output --env-file=.env src/main.ts"
 	},
 	"dependencies": {
-		"fastify": "^4.28.1"
+		"fastify": "^4.28.1",
+		"puppeteer": "^22.13.0",
+		"zod": "^3.23.8"
 	},
 	"devDependencies": {
 		"@types/node": "^20.14.10",
 		"esbuild": "^0.23.0",
 		"prettier": "^3.3.2",
+		"tsx": "^4.16.2",
 		"typescript": "~5.5.3"
 	},
 	"engines": {
