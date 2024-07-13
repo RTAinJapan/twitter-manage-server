@@ -2,7 +2,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"build": "esbuild src/main.ts --platform=node --bundle --sourcemap --target=node20 --outfile=build/main.js --packages=external",
+		"build": "esbuild src/main.ts --platform=node --bundle --format=esm --sourcemap --target=node20 --outfile=build/main.js --packages=external",
 		"start": "node build/main.js"
 	},
 	"dependencies": {
