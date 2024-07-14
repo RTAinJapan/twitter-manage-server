@@ -2,6 +2,7 @@ import fastify from "fastify";
 import { z } from "zod";
 import { createSession, getSession } from "./session-manager";
 import { env } from "./env";
+import { createReadStream } from "fs";
 
 const server = fastify();
 
@@ -15,6 +16,16 @@ await server.register(async (server) => {
 		if (authHeader !== env.AUTHORIZATION) {
 			reply.code(403).send("unauthorized");
 		}
+	});
+
+	server.get("/initialization-error.png", async (_, reply) => {
+		const file = createReadStream("/tmp/initialization-error.png");
+		reply.type("image/png").send(file);
+	});
+
+	server.get("/initialization-error.txt", async (_, reply) => {
+		const file = createReadStream("/tmp/initialization-error.txt");
+		reply.type("text/plain").send(file);
 	});
 
 	server.post("/create-session", async (request) => {

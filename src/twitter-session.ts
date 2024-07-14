@@ -1,5 +1,6 @@
 import * as puppeteer from "puppeteer";
 import { env } from "./env";
+import { writeFile } from "fs/promises";
 
 export type TwitterManageOptions = {
 	username: string;
@@ -121,7 +122,13 @@ export class TwitterSession {
 				enterConfirmationEmail(abortController),
 				findConfirmationCodeInput(abortController),
 				waitForFinish(abortController),
-			]);
+			]).catch(async (error) => {
+				await loginPage.screenshot({ path: "/tmp/initialization-error.png" });
+				const html = await loginPage.content();
+				await writeFile("/tmp/initialization-error.txt", html);
+				await this.close();
+				throw error;
+			});
 			abortController.abort();
 			if (result) {
 				this.#status = result.status;
