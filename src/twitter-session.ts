@@ -31,67 +31,106 @@ export class TwitterSession {
 	async initialize() {
 		const loginPage = await this.#getNewPage("https://x.com/login");
 
-		const abortController = new AbortController();
-
-		const usernameInput = await loginPage.waitForSelector("input[name=text]");
+		const usernameInput = await loginPage.waitForSelector(
+			'input[autocomplete="username"]',
+		);
 		if (!usernameInput) {
 			throw new Error("no username input");
 		}
 		await usernameInput.type(this.#options.username);
 		await usernameInput.press("Enter");
+		console.log("entered username");
 
-		const passwordInput = await loginPage.waitForSelector(
-			"input[name=password]",
-		);
-		if (!passwordInput) {
-			throw new Error("no password input");
-		}
-		await passwordInput.type(this.#options.password);
-		await passwordInput.press("Enter");
+		let passwordAttempt = 0;
 
-		const waitForFinish = async () => {
-			await loginPage.waitForSelector(tweetTextInputSelector, {
-				signal: abortController.signal,
-			});
-			abortController.abort();
-			await loginPage.close();
-			this.#status = "loggedIn";
-			console.log("logged in with username and password");
-			return { status: "loggedIn" } as const;
+		const enterPassword = async (abortController: AbortController) => {
+			if (passwordAttempt >= 3) {
+				throw new Error("too many password attempts");
+			}
+			passwordAttempt += 1;
+			const passwordInput = await loginPage.waitForSelector(
+				"input[name=password]",
+				{ signal: abortController.signal },
+			);
+			if (!passwordInput) {
+				throw new Error("no password input");
+			}
+			await passwordInput.type(this.#options.password);
+			await passwordInput.press("Enter");
+			console.log("entered password");
 		};
 
-		const confirmation = async () => {
+		const enterEmail = async (abortController: AbortController) => {
 			const input = await loginPage.waitForSelector(
-				'input[data-testid="ocfEnterTextTextInput"]',
+				'input[data-testid="ocfEnterTextTextInput"][name="text"][type="text"]',
+				{ signal: abortController.signal },
+			);
+			if (!input) {
+				throw new Error("no email input");
+			}
+			await input.type(this.#options.email);
+			await input.press("Enter");
+			console.log("entered email");
+		};
+
+		const enterConfirmationEmail = async (abortController: AbortController) => {
+			const input = await loginPage.waitForSelector(
+				'input[data-testid="ocfEnterTextTextInput"][type="email"]',
+				{ signal: abortController.signal },
+			);
+			if (!input) {
+				throw new Error("no email input");
+			}
+			await input.type(this.#options.email);
+			await input.press("Enter");
+			console.log("entered email confirmation");
+		};
+
+		const findConfirmationCodeInput = async (
+			abortController: AbortController,
+		) => {
+			const input = await loginPage.waitForSelector(
+				'input[data-testid="ocfEnterTextTextInput"]:not([name="text"]):not([type="text"]):not([type="email"])',
 				{ signal: abortController.signal },
 			);
 			if (!input) {
 				throw new Error("no confirmation input");
 			}
-			const inputType = await input.evaluate((el) => el.getAttribute("type"));
-			if (inputType === "email") {
-				await input.type(this.#options.email);
-				await input.press("Enter");
-				await loginPage.waitForNavigation();
-				await loginPage.waitForSelector(tweetTextInputSelector, {
-					signal: abortController.signal,
-				});
-				abortController.abort();
-				await loginPage.close();
-				this.#status = "loggedIn";
-				console.log("logged in with email confirmation");
-				return { status: "loggedIn" } as const;
-			} else {
-				abortController.abort();
-				this.#loginPageWaitingForCode = loginPage;
-				this.#status = "waitingForConfirmationCode";
-				console.log("waiting for confirmation code");
-				return { status: "waitingForConfirmationCode" } as const;
-			}
+			console.log("waiting for confirmation code");
+			return { status: "waitingForConfirmationCode" } as const;
 		};
 
-		const result = await Promise.any([waitForFinish(), confirmation()]);
-		return result;
+		const waitForFinish = async (abortController: AbortController) => {
+			await loginPage.waitForSelector(tweetTextInputSelector, {
+				signal: abortController.signal,
+			});
+			console.log("logged in");
+			return { status: "loggedIn" } as const;
+		};
+
+		let attempts = 0;
+		while (true) {
+			if (attempts >= 6) {
+				throw new Error("too many attempts");
+			}
+			attempts += 1;
+			const abortController = new AbortController();
+			const result = await Promise.any([
+				enterPassword(abortController),
+				enterEmail(abortController),
+				enterConfirmationEmail(abortController),
+				findConfirmationCodeInput(abortController),
+				waitForFinish(abortController),
+			]);
+			abortController.abort();
+			if (result) {
+				this.#status = result.status;
+				if (result.status === "loggedIn") {
+					await loginPage.close();
+				}
+				return result;
+			}
+		}
 	}
 
 	async inputConfirmationCode(code: string) {
@@ -136,6 +175,10 @@ export class TwitterSession {
 				await fileInput.uploadFile(...files);
 				await page.waitForSelector('div[data-testid="attachments"]');
 			}
+
+			page.on("response", async (response) => {
+				console.log(await response.json());
+			});
 
 			const tweetButton = await page.waitForSelector(
 				'button[data-testid="tweetButtonInline"]:not([aria-disabled="true"])',
