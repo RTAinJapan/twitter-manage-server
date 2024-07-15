@@ -2,9 +2,23 @@ import { TwitterSession, type TwitterManageOptions } from "./twitter-session";
 
 const sessions = new Map<string, TwitterSession>();
 
+const getSessionByUsername = (username: string) => {
+	for (const [id, session] of sessions) {
+		if (session.username === username) {
+			return { id, session };
+		}
+	}
+	return null;
+};
+
 export const createSession = async (options: TwitterManageOptions) => {
 	const twitterSession = new TwitterSession(options);
 	const { status } = await twitterSession.initialize();
+	const existingSession = getSessionByUsername(options.username);
+	if (existingSession) {
+		await existingSession.session.close();
+		sessions.delete(existingSession.id);
+	}
 	while (true) {
 		const id = crypto.randomUUID();
 		if (!sessions.has(id)) {

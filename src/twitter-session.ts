@@ -19,6 +19,9 @@ export class TwitterSession {
 	get status() {
 		return this.#status;
 	}
+	get username() {
+		return this.#options.username;
+	}
 
 	#options: TwitterManageOptions;
 
