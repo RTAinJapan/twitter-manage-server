@@ -6,10 +6,16 @@ RUN npm i -g pnpm
 FROM base AS build
 
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm i
+RUN pnpm i --frozen-lockfile
 
 COPY src src
 RUN pnpm build
+
+
+FROM base AS deps
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm i --prod --frozen-lockfile
 
 
 FROM base
@@ -53,8 +59,7 @@ RUN apt-get update && apt-get install -y \
 	xdg-utils \
 	&& rm -rf /var/lib/apt/lists/*
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm i --production
+COPY --from=deps /app/node_modules node_modules
 COPY --from=build /app/build build
 
 ENV NODE_ENV production
