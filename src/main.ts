@@ -3,6 +3,11 @@ import { z } from "zod";
 import { createSession, getSession } from "./session-manager";
 import { env } from "./env";
 import { createReadStream } from "fs";
+import sharp from "sharp";
+import { base64ToUint8Array } from "uint8array-extras";
+import { tmpdir } from "os";
+import { rm, writeFile } from "fs/promises";
+import { join } from "path";
 
 const server = fastify();
 
@@ -62,18 +67,40 @@ await server.register(async (server) => {
 		await session.inputConfirmationCode(body.code);
 	});
 
+	const tmpDir = tmpdir();
+	const saveImages = async (base64: string) => {
+		const imageBinary = base64ToUint8Array(base64);
+		const { format } = await sharp(imageBinary).metadata();
+		if (!format) {
+			throw new Error("invalid image format");
+		}
+		const imagePath = join(tmpDir, `${crypto.randomUUID()}.${format}`);
+		await writeFile(imagePath, imageBinary);
+		return imagePath;
+	};
+
 	server.post("/tweet", async (request, reply) => {
 		const schema = z.object({
 			sessionId: z.string().min(1),
 			text: z.string().min(1),
 			files: z.array(z.string().base64()),
+			replyToTweetId: z.string().optional(),
 		});
 		const body = schema.parse(request.body);
 		const session = getSession(body.sessionId);
 		if (!session) {
 			return reply.code(404).send("session not found");
 		}
-		await session.tweet(body.text, body.files);
+		const filePaths = await Promise.all(body.files.map(saveImages));
+		try {
+			if (body.replyToTweetId) {
+				await session.reply(body.replyToTweetId, body.text, filePaths);
+			} else {
+				await session.tweet(body.text, filePaths);
+			}
+		} finally {
+			await Promise.all(filePaths.map((filePath) => rm(filePath)));
+		}
 	});
 
 	server.post("/delete-tweet", async (request, reply) => {
@@ -87,21 +114,6 @@ await server.register(async (server) => {
 			return reply.code(404).send("session not found");
 		}
 		await session.deleteTweet(body.tweetId);
-	});
-
-	server.post("/reply", async (request, reply) => {
-		const schema = z.object({
-			sessionId: z.string().min(1),
-			tweetId: z.string().min(1),
-			text: z.string().min(1),
-			files: z.array(z.string().base64()),
-		});
-		const body = schema.parse(request.body);
-		const session = getSession(body.sessionId);
-		if (!session) {
-			return reply.code(404).send("session not found");
-		}
-		await session.reply(body.tweetId, body.text, body.files);
 	});
 
 	server.post("/get-tweets", async (request, reply) => {
