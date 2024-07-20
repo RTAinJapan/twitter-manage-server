@@ -59,10 +59,11 @@ RUN apt-get update && apt-get install -y \
 	xdg-utils \
 	&& rm -rf /var/lib/apt/lists/*
 
+COPY package.json ./
 COPY --from=deps /app/node_modules node_modules
 COPY --from=build /app/build build
 
 ENV NODE_ENV production
 ENV PUPPETEER_HEADLESS true
 
-CMD ["node", "build/main.js"]
+CMD ["npm", "start"]
